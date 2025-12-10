@@ -1,4 +1,5 @@
 from email.policy import HTTP
+from multiprocessing import Value
 from fastapi import HTTPException, status
 import sqlalchemy
 from app import crud
@@ -29,9 +30,12 @@ book_copy_integrity_exception = HTTPException(
     detail='Error creating book copies'
 )
 
-def generate_book_copy_barcode(base_barcode: str, serial: int):
-    str_serial = str(serial).zfill(3)
-    return f'COPY-{base_barcode}-{str_serial}'
+def generate_book_copy_barcode(base_barcode, serial):
+    try:
+        str_serial = str(serial).zfill(3)
+        return f'COPY-{base_barcode}-{str_serial}'
+    except ValueError as e:
+        logger.warning(f'ValueError: {e}')
 
 async def create_new_book_service(db: AsyncSession, book_data: dict):
     try:
@@ -105,7 +109,7 @@ async def add_book_copies_service(db: AsyncSession, quantity: int, isbn: int):
             last_serial+=1
         await crud.add_book_copies(db, book_copies)
         logger.info(f'Created {quantity} copies of {isbn}')
-        return {'message': 'copies created successfully'}
+        return {'message': f'{quantity} copies of ISBN-{isbn} were created successfully'}
     except IntegrityError as e:
         logger.warning(f'Integrity error creating book copies: {e}')
         raise book_integrity_exception
