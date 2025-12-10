@@ -20,7 +20,7 @@ async def get_book_by_isbn(db: AsyncSession, bk_isbn: int):
 async def get_last_book_copy(db: AsyncSession, book: Book):
     stmt = select(BookCopy).order_by(desc(BookCopy.serial)).where(BookCopy.book_isbn == book.isbn)
     result = await db.execute(stmt)
-    return result.first()
+    return result.scalars().first()
 
 async def create_new_book(db: AsyncSession, book: Book):
     db.add(book)
@@ -40,5 +40,4 @@ async def update_book(
         setattr(book, key, value)
     await db.commit()
 
-# can i interact with the result returned from first() just like scalar_one_or_none()?
-# yes, first() returns a Row object or None, you can access the columns using indexing or attribute access.
+
