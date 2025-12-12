@@ -1,0 +1,61 @@
+from pydantic import BaseModel, PositiveInt, ConfigDict, Field
+from datetime import datetime, timedelta
+from typing import Optional
+
+class BookBase(BaseModel):
+    title: str
+    author: str
+    available: bool = True
+    location: str
+
+class BookCreate(BookBase):
+    isbn: PositiveInt
+
+class BookUpdate(BaseModel):
+    title: Optional[str] = None
+    author: Optional[str] = None
+    available: Optional[bool] = True
+    location: Optional[str] = None
+
+class BookResponse(BookBase):
+    id: PositiveInt
+    isbn: PositiveInt
+    library_barcode: str
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    model_config = ConfigDict(from_attributes=True)
+
+class BookCopyForm(BaseModel):
+    isbn: PositiveInt
+    quantity: PositiveInt
+
+class LoanBase(BaseModel):
+    loan_id: str
+    user_id: str
+    bk_copy_barcode: str
+
+class LoanCreate(LoanBase):
+    pass
+
+class LoanResponse(LoanBase):
+    status: str
+    checked_out_at: datetime
+    due_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+class LoanModel(BaseModel):
+    pass
+
+class BkCopyResponse(BaseModel):
+    book_isbn: str
+    copy_barcode: str
+    status: str
+    model_config = ConfigDict(from_attributes=True)
+
+class BkCopyLoanResponse(BaseModel):
+    loan: LoanResponse
+    book_copy: BkCopyResponse
+    model_config = ConfigDict(from_attributes=True)
+
+    

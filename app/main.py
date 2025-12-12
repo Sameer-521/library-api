@@ -1,9 +1,9 @@
 from fastapi import FastAPI
-from app.config import Settings
+from app.core.config import Settings
 from contextlib import asynccontextmanager
 from functools import lru_cache
-from app.routers import books
-from app.database import engine, Base
+from app.routers import books, users
+from app.core.database import engine, Base
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -15,6 +15,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 app.include_router(books.books_router)
+app.include_router(users.users_router)
 
 @lru_cache
 async def get_settings():

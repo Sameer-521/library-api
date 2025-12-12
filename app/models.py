@@ -1,14 +1,33 @@
-from app.database import Base
+from app.core.database import Base
 from sqlalchemy import (Column, String, Integer, ARRAY,
                         DateTime, Boolean, func, ForeignKey,
                         JSON, Enum)
 from sqlalchemy.orm import relationship
+from datetime import datetime, timedelta, timezone
 import string, secrets, enum
 
 def generate_barcode(serial: str | None = None):
     digits = string.digits
     serial = ''.join([secrets.choice(digits) for _ in range(7)])
     return f'BK-{serial}'
+
+def generate_random_id():
+    digits = string.digits
+    letters = string.ascii_uppercase
+    letter_part = ''.join([secrets.choice(letters) for _ in range(2)])
+    num_part = ''.join([secrets.choice(digits) for _ in range(8)])
+    return f'{letter_part}-{num_part}'
+
+def generate_library_cardnumber():
+    id = generate_random_id()
+    return f'LB-{id}'
+
+def generate_loan_id():
+    id = generate_random_id()
+    return f'LN-{id}'
+
+def default_loan_due_date():
+    return datetime.now(timezone.utc) + timedelta(days=7)
 
 class LoanStatus(enum.Enum):
     ACTIVE = 'active'
@@ -21,6 +40,11 @@ class Event(enum.Enum):
     CHECKOUT = 'checkout'
     RETURN = 'return'
 
+class BkCopyStatus(enum.Enum):
+    AVAILABLE = 'available'
+    LOST = 'lost'
+    BORROWED = 'borrowed'
+
 class Book(Base):
     __tablename__ = 'books'
 
@@ -32,7 +56,7 @@ class Book(Base):
     available = Column(Boolean, default=True)
     location = Column(String(50), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), on_update=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     #phsyical_copies = relationship()
 
@@ -41,8 +65,9 @@ class User(Base):
 
     id = Column(Integer, primary_key=True)
     full_name = Column(String(50), nullable=False)
-    email = Column(String(50), nullable=False)
-    card_number = Column(String(50), unique=True, nullable=False)
+    email = Column(String(50), nullable=False, unique=True)
+    password = Column(String, nullable=False)
+    card_number = Column(String(50), unique=True, default=generate_library_cardnumber)
     is_active = Column(Boolean, default=True)
     is_staff = Column(Boolean, default=False)
     is_superuser = Column(Boolean, default=False)
@@ -55,11 +80,12 @@ class Loan(Base):
     __tablename__ = 'loans'
 
     id = Column(Integer, primary_key=True)
-    book_copy_id = Column(String, ForeignKey('users.id'))
-    user_id = Column(String, ForeignKey('book_copies.copy_id'), index=True)
+    loan_id = Column(String(50), unique=True,default=generate_loan_id)
+    user_id = Column(String, ForeignKey('users.id'))
+    bk_copy_barcode = Column(String, ForeignKey('book_copies.copy_barcode'), index=True)
     status = Column(Enum(LoanStatus), default=LoanStatus.ACTIVE)
     checked_out_at = Column(DateTime(timezone=True), server_default=func.now())
-    due_at = Column(DateTime(timezone=True), default=14)
+    due_at = Column(DateTime(timezone=True), default=default_loan_due_date)
     returned_at = Column(DateTime)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -72,7 +98,7 @@ class BookCopy(Base):
     book_isbn = Column(String(50), ForeignKey('books.isbn'), nullable=False, index=True)
     serial = Column(Integer, nullable=False)
     copy_barcode = Column(String(50), nullable=False)
-    is_available = Column(Boolean, default=True)
+    status = Column(Enum(BkCopyStatus), default=BkCopyStatus.AVAILABLE)
 
 class Audit(Base):
     __tablename__ = 'audit'

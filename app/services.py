@@ -1,14 +1,18 @@
-from email.policy import HTTP
-from multiprocessing import Value
+from datetime import timedelta
+from typing import Optional
 from fastapi import HTTPException, status
-import sqlalchemy
-from app import crud
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-from app.models import Book, BookCopy
+from app import crud
+from app.models import Book, BookCopy, User, BkCopyStatus, Loan
+from app.core.auth import authenticate_user, create_access_token, hash_password
+from app.core.config import Settings
+from app.schemas.book import LoanCreate, LoanResponse
 from logging import Logger
 
 logger = Logger(__name__)
+
+settings=Settings()
 
 book_not_found_exception = HTTPException(
     status.HTTP_404_NOT_FOUND,
@@ -25,6 +29,11 @@ book_integrity_exception = HTTPException(
     detail='Book with this title or ISBN already exists'
 )
 
+user_integrity_exception = HTTPException(
+    status.HTTP_409_CONFLICT,
+    detail='User with this email already exists'
+)
+
 book_copy_integrity_exception = HTTPException(
     status.HTTP_409_CONFLICT,
     detail='Error creating book copies'
@@ -37,6 +46,7 @@ def generate_book_copy_barcode(base_barcode, serial):
     except ValueError as e:
         logger.warning(f'ValueError: {e}')
 
+# tested
 async def create_new_book_service(db: AsyncSession, book_data: dict):
     try:
         book = Book(**book_data)
@@ -52,6 +62,7 @@ async def create_new_book_service(db: AsyncSession, book_data: dict):
         await db.rollback()   
         raise internal_error_exception
 
+# tested
 async def get_book_by_isbn_service(
         db: AsyncSession, 
         isbn: int):
@@ -68,7 +79,8 @@ async def get_book_by_isbn_service(
         logger.error(f'DataBase error retrieving book: {e}')
         await db.rollback()
         raise internal_error_exception
-    
+
+#tested  
 async def update_book_service(
         db: AsyncSession,
         update_data: dict,
@@ -77,9 +89,10 @@ async def update_book_service(
         book = await crud.get_book_by_isbn(db, isbn)
         if not book:
             raise book_not_found_exception
-        await crud.update_book(db, book, update_data, isbn)
+        await crud.update_book(db, book, update_data)
         logger.info(f'Book-{book.library_barcode} updated')
     except IntegrityError as e:
+        await db.rollback()
         logger.warning(f'Integrity error updating book: {e}')
         raise book_integrity_exception
     except HTTPException:
@@ -89,6 +102,7 @@ async def update_book_service(
         await db.rollback()
         raise internal_error_exception
 
+# tested
 async def add_book_copies_service(db: AsyncSession, quantity: int, isbn: int):
     try:
         book_copies = []
@@ -111,6 +125,7 @@ async def add_book_copies_service(db: AsyncSession, quantity: int, isbn: int):
         logger.info(f'Created {quantity} copies of {isbn}')
         return {'message': f'{quantity} copies of ISBN-{isbn} were created successfully'}
     except IntegrityError as e:
+        await db.rollback()
         logger.warning(f'Integrity error creating book copies: {e}')
         raise book_integrity_exception
     except HTTPException:
@@ -118,4 +133,79 @@ async def add_book_copies_service(db: AsyncSession, quantity: int, isbn: int):
     except SQLAlchemyError as e:
         logger.error(f'DataBase error adding book copies: {e}')
         await db.rollback()
+        raise internal_error_exception
+
+# tested   
+async def loan_book_service(
+        db: AsyncSession,
+        isbn: int,
+        current_user: User
+        ):
+    try:
+        book_copy = await crud.get_book_copy(db, isbn)
+        if not book_copy:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                detail=f'There are no available copies of ISBN-{isbn} currently'
+            )
+        loan_data = {
+            'user_id': current_user.id,
+            'bk_copy_barcode': book_copy.copy_barcode
+        }
+        loan = Loan(**loan_data)
+        created_loan = await crud.create_loan(db, loan)
+        updated_bk_copy = await crud.update_bk_copy(
+            db, book_copy, {'status': BkCopyStatus.BORROWED})
+
+        logger.info('Retrieved book copy')
+        return {'loan': created_loan, 'book_copy': updated_bk_copy}
+    except IntegrityError as e:
+        await db.rollback()
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail='Loan with this id already exists'
+        )
+    except HTTPException:
+        raise
+    except SQLAlchemyError as e:
+        logger.error(f'DataBase error fetching book_copy: {e}')
+        await db.rollback()
+        raise internal_error_exception
+
+# tested 
+async def create_user_service(
+        db: AsyncSession,
+        user_data: dict
+        ):
+    try:
+        data = user_data.copy()
+        data['password'] = hash_password(data['password'])
+        await crud.create_new_user(db, User(**data))
+        logger.info('Created new user successfully')
+        return {'message': 'User created successfully'}
+    except IntegrityError as e:
+        logger.warning(f'Integrity error creating new user: {e}')
+        raise user_integrity_exception
+    except HTTPException:
+        raise
+    except SQLAlchemyError as e:
+        logger.error(f'DataBase error creating user: {e}')
+        await db.rollback()
+        raise internal_error_exception
+
+# tested  
+async def login_user_service(
+        db: AsyncSession,
+        user_data: dict
+        ):
+    try:
+        ACCESS_TOKEN_EXPIRE_MINUTES = timedelta(minutes=settings.access_token_expire_minutes)
+        user = await authenticate_user(user_data, db)
+        data = {'sub': user.email}
+        token = create_access_token(data, ACCESS_TOKEN_EXPIRE_MINUTES)
+        return {'access_token': token, 'token_type': 'bearer'}
+    except HTTPException:
+        raise
+    except SQLAlchemyError as e:
+        logger.error(f'DataBase error reading user: {e}')
         raise internal_error_exception
