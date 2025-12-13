@@ -6,8 +6,10 @@ from app.core.config import Settings
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import SQLAlchemyError
 from app import crud
 from app.core.database import get_session
+from app.models import User
 from passlib.context import CryptContext
 
 settings = Settings()
@@ -94,3 +96,26 @@ async  def get_current_staff_user(current_user=Depends(get_current_active_user))
             detail='Not enough previliges'
         )
     return current_user
+
+async def create_superuser(
+        db: AsyncSession, 
+        email=settings.admin_email,
+        password=settings.admin_password,
+        full_name=settings.admin_name
+        ):
+    try:
+        superuser = await crud.get_default_superuser(db, email)
+        if not superuser:
+            data = {
+                'full_name': full_name,
+                'password': hash_password(password),
+                'email': email,
+                'is_staff': True,
+                'is_superuser': True
+            }
+            admin_user = User(**data)
+            await crud.create_default_superuser(db, admin_user)
+        print('Superuser initialized')
+    except SQLAlchemyError as e:
+        await db.rollback()
+        print(f'DataBase error initializing admin_user: {e}')

@@ -22,6 +22,11 @@ async def get_last_book_copy(db: AsyncSession, book: Book):
     result = await db.execute(stmt)
     return result.scalars().first()
 
+async def get_user_active_loans(db: AsyncSession, user_id):
+    stmt = select(Loan).where(Loan.user_id == user_id, Loan.status == 'ACTIVE')
+    result = await db.execute(stmt)
+    return result.scalars().all()
+
 async def create_new_book(db: AsyncSession, book: Book):
     db.add(book)
     await db.commit()
@@ -47,6 +52,14 @@ async def get_book_copy(
     result = await db.execute(stmt)
     return result.scalars().first()
 
+async def get_book_copy_by_barcode(
+        db: AsyncSession,
+        copy_barcode_: str
+        ):
+    stmt = select(BookCopy).where(BookCopy.copy_barcode == copy_barcode_)
+    result = await db.execute(stmt)
+    return result.scalar_one_or_none()
+
 async def update_bk_copy(
         db: AsyncSession, 
         book_copy: BookCopy, 
@@ -57,6 +70,17 @@ async def update_bk_copy(
     await db.commit()
     await db.refresh(book_copy)
     return book_copy
+
+async def update_loan(
+        db: AsyncSession, 
+        loan: Loan, 
+        update_data: dict
+        ):
+    for key, value in update_data.items():
+        setattr(loan, key, value)
+    await db.commit()
+    await db.refresh(loan)
+    return loan
 
 async def get_user_by_email(db: AsyncSession, _email: str):
     stmt = select(User).where(User.email == _email)
@@ -72,3 +96,25 @@ async def create_loan(db: AsyncSession, loan: Loan):
     await db.commit()
     await db.refresh(loan)
     return loan
+
+async def get_all_non_staff_users(db: AsyncSession):
+    stmt = select(User).where(User.is_staff==False, User.is_superuser==False)
+    result = await db.execute(stmt)
+    return result.scalars().all()
+
+async def get_loan_by_id(
+        db:AsyncSession,
+        _loan_id: str
+        ):
+    stmt = select(Loan).where(Loan.loan_id == _loan_id)
+    result = await db.execute(stmt)
+    return result.scalar_one_or_none()
+
+async def create_default_superuser(db: AsyncSession, admin_user: User):
+    db.add(admin_user)
+    await db.commit()
+
+async def get_default_superuser(db: AsyncSession, email: str):
+    stmt = select(User).where(User.is_staff==True, User.is_superuser==True, User.email == email)
+    result = await db.execute(stmt)
+    return result.scalar_one_or_none()

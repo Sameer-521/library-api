@@ -32,7 +32,6 @@ def default_loan_due_date():
 class LoanStatus(enum.Enum):
     ACTIVE = 'active'
     RETURNED = 'returned'
-    LOST = 'lost'
     OVERDUE = 'overdue'
 
 class Event(enum.Enum):
@@ -44,6 +43,7 @@ class BkCopyStatus(enum.Enum):
     AVAILABLE = 'available'
     LOST = 'lost'
     BORROWED = 'borrowed'
+    IN_CHECK = 'in-check'
 
 class Book(Base):
     __tablename__ = 'books'
@@ -108,11 +108,3 @@ class Audit(Base):
     event = Column(Enum(Event), nullable=False)
     details = Column(JSON, nullable=False)
     audited_at = Column(DateTime(timezone=True), server_default=func.now())
-
-# how to attatch loan to original book so we can track how many loans a book has had
-# Book.loans = relationship('Loan', secondary='book_copies',
-#                           primaryjoin=Book.id==BookCopy.book_id, secondaryjoin=BookCopy.copy_id==Loan.book_copy_id, back_populates='book')
-# Loan.book = relationship('Book', back_populates='loans')
-# explaining the relationships the Book.loans and Loan.book:
-# A Book can have multiple Loans through its BookCopies, and each Loan is associated with a specific BookCopy of that Book.
-

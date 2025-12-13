@@ -142,6 +142,12 @@ async def loan_book_service(
         current_user: User
         ):
     try:
+        user_loans = await crud.get_user_active_loans(db, current_user.id)
+        if len(user_loans) >= 3:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                detail='User is not eligble for anymore loans'
+            )
         book_copy = await crud.get_book_copy(db, isbn)
         if not book_copy:
             raise HTTPException(
@@ -207,5 +213,58 @@ async def login_user_service(
     except HTTPException:
         raise
     except SQLAlchemyError as e:
+        await db.rollback()
         logger.error(f'DataBase error reading user: {e}')
+        raise internal_error_exception
+    
+async def get_all_non_staff_users_service(
+        db: AsyncSession
+        ):
+    try:
+        users = await crud.get_all_non_staff_users(db)
+        return users
+    except HTTPException:
+        raise
+    except SQLAlchemyError as e:
+        await db.rollback()
+        logger.error(f'DataBase error fetching users: {e}')
+        raise internal_error_exception
+
+async def return_book_loan_service(
+        db: AsyncSession,
+        bk_copy_barcode_: str,
+        loan_id: str
+        ):
+    try:
+        loan = await crud.get_loan_by_id(db, loan_id)
+        if not loan:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                detail='Loan not found'
+            )
+        
+        # I'll fix this later
+        if bk_copy_barcode_ != loan.bk_copy_barcode:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail='Book-copy-barcode not the same as stated by loan'
+            )
+        
+        book_returned = await crud.get_book_copy_by_barcode(db, bk_copy_barcode_)
+        if not book_returned:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                detail='Book copy not found'
+            )
+        updated_bk_copy = await crud.update_bk_copy(
+            db, book_returned, {'status': BkCopyStatus.IN_CHECK})
+        
+        updated_loan = await crud.update_loan(db, loan, {'status': 'RETURNED'})
+        return {'message': 'User loan cleared, awaiting staff checkup'}
+    except HTTPException:
+        print('its here')
+        raise
+    except SQLAlchemyError as e:
+        await db.rollback()
+        logger.error(f'DataBase error clearing loan: {e}')
         raise internal_error_exception

@@ -3,6 +3,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     app_name: str = 'Library-API'
     admin_email: str = ''
+    admin_password: str = ''
+    admin_name: str = ''
     database_url: str = ''
     test_database_url: str = ''
 

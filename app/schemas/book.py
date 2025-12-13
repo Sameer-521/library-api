@@ -47,6 +47,10 @@ class LoanResponse(LoanBase):
 class LoanModel(BaseModel):
     pass
 
+class LoanReturnForm(BaseModel):
+    bk_copy_barcode: str
+    loan_id: str
+    
 class BkCopyResponse(BaseModel):
     book_isbn: str
     copy_barcode: str
@@ -57,5 +61,3 @@ class BkCopyLoanResponse(BaseModel):
     loan: LoanResponse
     book_copy: BkCopyResponse
     model_config = ConfigDict(from_attributes=True)
-
-    
