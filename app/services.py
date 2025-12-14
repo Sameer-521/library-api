@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import timedelta, datetime, timezone
 from typing import Optional
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -38,6 +38,14 @@ book_copy_integrity_exception = HTTPException(
     status.HTTP_409_CONFLICT,
     detail='Error creating book copies'
 )
+
+# helper function to safely compare ofset naive and ofset aware datetimes
+def safe_datetime_compare(dt1: datetime, dt2: datetime) -> bool:
+    if dt1.tzinfo is None and dt2.tzinfo is not None:
+        dt1 = dt1.replace(tzinfo=timezone.utc)
+    elif dt1.tzinfo is not None and dt2.tzinfo is None:
+        dt2 = dt2.replace(tzinfo=timezone.utc)
+    return dt1 > dt2
 
 def generate_book_copy_barcode(base_barcode, serial):
     try:
@@ -166,6 +174,7 @@ async def loan_book_service(
         logger.info('Retrieved book copy')
         return {'loan': created_loan, 'book_copy': updated_bk_copy}
     except IntegrityError as e:
+        logger.warning(f'Integrity error fetching book_copy: {e}')
         await db.rollback()
         raise HTTPException(
             status.HTTP_409_CONFLICT,
@@ -236,6 +245,8 @@ async def return_book_loan_service(
         loan_id: str
         ):
     try:
+        fined = False
+        fine_fee = 0
         loan = await crud.get_loan_by_id(db, loan_id)
         if not loan:
             raise HTTPException(
@@ -256,13 +267,37 @@ async def return_book_loan_service(
                 status.HTTP_404_NOT_FOUND,
                 detail='Book copy not found'
             )
+        if book_returned.status != BkCopyStatus.BORROWED:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                detail='This book copy is not currently on loan'
+            )
         updated_bk_copy = await crud.update_bk_copy(
             db, book_returned, {'status': BkCopyStatus.IN_CHECK})
         
-        updated_loan = await crud.update_loan(db, loan, {'status': 'RETURNED'})
-        return {'message': 'User loan cleared, awaiting staff checkup'}
+        returned_at = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)# + timedelta(days=14)
+        loan_status = 'RETURNED'
+        if safe_datetime_compare(returned_at, loan.due_at): # overdue
+            loan_status = 'RETURNED_LATE'
+            days_deltas = (returned_at.date() - loan.due_at.date()).days
+            fine = 100 * days_deltas
+            fine_fee = fine
+            fined = True
+            user = await crud.get_user_by_id(db, loan.user_id)
+            updated_fine = fine + user.fine_balance
+            await crud.update_user(db, user, update_data={'fine_balance': updated_fine})
+
+        loan_data = {
+            'status': loan_status,
+            'returned_at': returned_at
+            }
+        updated_loan = await crud.update_loan(db, loan, loan_data)
+        return {
+            'message': 'User loan cleared, you have also been fined for delay',
+            'delay time': f'{days_deltas} days',
+            'fine': f'{fine_fee}'
+            } if fined else {'message': 'User loan cleared, awaiting staff checkup'}
     except HTTPException:
-        print('its here')
         raise
     except SQLAlchemyError as e:
         await db.rollback()

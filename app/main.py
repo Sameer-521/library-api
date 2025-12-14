@@ -32,6 +32,5 @@ async def root():
 
 # TODO:
 # Add checks: whether user is eligible for loan or not: partially done
-# Update staff dependencies
 # Implement audit logic
 # Implement book copy clearance: check book status and mark them accordingly e.g lost

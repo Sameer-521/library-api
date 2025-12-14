@@ -114,7 +114,20 @@ async def create_default_superuser(db: AsyncSession, admin_user: User):
     db.add(admin_user)
     await db.commit()
 
+async def update_user(
+        db: AsyncSession, 
+        user: User, 
+        update_data: dict,
+        ):
+    for key, value in update_data.items():
+        setattr(user, key, value)
+    await db.commit()
+
 async def get_default_superuser(db: AsyncSession, email: str):
     stmt = select(User).where(User.is_staff==True, User.is_superuser==True, User.email == email)
     result = await db.execute(stmt)
     return result.scalar_one_or_none()
+
+async def get_user_by_id(db: AsyncSession, user_id):
+    user = await db.get(User, user_id)
+    return user
