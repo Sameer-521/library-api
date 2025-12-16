@@ -1,6 +1,6 @@
 from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models import Book, BookCopy, User, Loan
+from app.models import Book, BookCopy, User, Loan, BkCopySchedule
 from typing import List
 
 async def get_book_by_id(db: AsyncSession, book_id: int):
@@ -21,6 +21,30 @@ async def get_last_book_copy(db: AsyncSession, book: Book):
     stmt = select(BookCopy).order_by(desc(BookCopy.serial)).where(BookCopy.book_isbn == book.isbn)
     result = await db.execute(stmt)
     return result.scalars().first()
+
+async def get_bk_copy_by_barcode(db: AsyncSession, barcode: str):
+    stmt = select(BookCopy).where(BookCopy.copy_barcode == barcode)
+    result = await db.execute(stmt)
+    return result.scalar_one_or_none()
+
+async def get_active_schedule(db: AsyncSession, isbn: int, user_id: int):
+    stmt = select(BkCopySchedule).where(
+        BkCopySchedule.status == 'ACTIVE',
+        BkCopySchedule.user_id == user_id
+        )
+
+    stmt = stmt.join(BookCopy, BkCopySchedule.bk_copy_barcode == BookCopy.copy_barcode)
+    result = await db.execute(stmt)
+    return result.scalars().first()
+
+async def update_bk_schedule(
+        db: AsyncSession, 
+        bk_copy_schedule: BkCopySchedule, 
+        update_data: dict,
+        ):
+    for key, value in update_data.items():
+        setattr(bk_copy_schedule, key, value)
+    await db.commit()
 
 async def get_user_active_loans(db: AsyncSession, user_id):
     stmt = select(Loan).where(Loan.user_id == user_id, Loan.status == 'ACTIVE')
@@ -131,3 +155,9 @@ async def get_default_superuser(db: AsyncSession, email: str):
 async def get_user_by_id(db: AsyncSession, user_id):
     user = await db.get(User, user_id)
     return user
+
+async def create_schedule(db: AsyncSession, schedule: BkCopySchedule):
+    db.add(schedule)
+    await db.commit()
+    await db.refresh(schedule)
+    return schedule

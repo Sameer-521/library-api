@@ -1,7 +1,8 @@
 from fastapi import APIRouter, status, Depends, Query, Form
 from app.schemas.book import (BookCreate, BookResponse,
                                BookUpdate, BookCopyForm, 
-                               BkCopyLoanResponse, LoanReturnForm)
+                               BkCopyLoanResponse, LoanReturnForm,
+                               FullScheduleInfo)
 from app import services
 from app.core.database import get_session, AsyncSession
 from app.core.auth import get_current_active_user, get_current_staff_user
@@ -68,7 +69,6 @@ async def return_book_loan(
     staff_user=Depends(get_current_staff_user),
     ):
     data = return_loan_form.model_dump()
-    print(data)
     message = await services.return_book_loan_service(db, data['bk_copy_barcode'], data['loan_id'])
     return message
 
@@ -81,3 +81,13 @@ async def loan_book(
     ):
     loan_info = await services.loan_book_service(db, isbn, current_user)
     return loan_info
+
+@books_router.post('/book-schedule/{isbn}', 
+response_model=FullScheduleInfo, status_code=status.HTTP_201_CREATED)
+async def schedule_book(
+    isbn: int,
+    db: AsyncSession=Depends(get_session),
+    current_user: User=Depends(get_current_active_user)
+    ):
+    schedule_info = await services.schedule_book_copy_service(db, isbn, current_user)
+    return schedule_info

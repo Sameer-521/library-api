@@ -31,6 +31,8 @@ async def root():
     return {'message': 'This is the root page'}
 
 # TODO:
-# Add checks: whether user is eligible for loan or not: partially done
+
 # Implement audit logic
 # Implement book copy clearance: check book status and mark them accordingly e.g lost
+# Implement book clearance via external worker
+# Add maintenance utilities

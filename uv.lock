@@ -454,6 +454,18 @@ wheels = [
 ]
 
 [[package]]
+name = "fastapi-standalone-docs"
+version = "0.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "fastapi" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/20/6e/1da54c427e4ae7c4dfd5f01d2b9d02680c105b7ea2d9f0dd76a79e390d22/fastapi_standalone_docs-0.2.0.tar.gz", hash = "sha256:003ca68eff4c84bf7997bba4028eebf7b06f47fb6b08b1551cf33fe064f11f12", size = 723126, upload-time = "2025-02-24T14:56:40.471Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/07/19/861022421e2c593d8f07275da22015d89ae7f4df0490e64653ca3fd8bd5d/fastapi_standalone_docs-0.2.0-py3-none-any.whl", hash = "sha256:553fc57ba18d15c4797000718cbece214468abd29e681f6bcfa004d5fbee93d0", size = 726696, upload-time = "2025-02-24T14:56:38.947Z" },
+]
+
+[[package]]
 name = "fastar"
 version = "0.8.0"
 source = { registry = "https://pypi.org/simple" }
@@ -674,6 +686,7 @@ dependencies = [
     { name = "argon2-cffi" },
     { name = "asyncpg" },
     { name = "fastapi", extra = ["all", "standard"] },
+    { name = "fastapi-standalone-docs" },
     { name = "passlib", extra = ["bcrypt"] },
     { name = "pydantic-settings" },
     { name = "pytest" },
@@ -690,6 +703,7 @@ requires-dist = [
     { name = "argon2-cffi", specifier = ">=25.1.0" },
     { name = "asyncpg", specifier = ">=0.31.0" },
     { name = "fastapi", extras = ["all", "standard"], specifier = ">=0.124.0" },
+    { name = "fastapi-standalone-docs", specifier = ">=0.2.0" },
     { name = "passlib", extras = ["bcrypt"], specifier = ">=1.7.4" },
     { name = "pydantic-settings", specifier = ">=2.12.0" },
     { name = "pytest", specifier = ">=9.0.2" },

@@ -1,3 +1,4 @@
+from tkinter import ACTIVE
 from app.core.database import Base
 from sqlalchemy import (Column, String, Integer, ARRAY,
                         DateTime, Boolean, func, ForeignKey,
@@ -26,6 +27,10 @@ def generate_loan_id():
     id = generate_random_id()
     return f'LN-{id}'
 
+def generate_schedule_id():
+    id = generate_random_id()
+    return f'SC-{id}'
+
 def default_loan_due_date():
     return datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0) + timedelta(days=7)
 
@@ -44,7 +49,13 @@ class BkCopyStatus(enum.Enum):
     LOST = 'lost'
     BORROWED = 'borrowed'
     IN_CHECK = 'in-check'
+    RESERVED = 'reserved'
 
+class ScheduleStatus(enum.Enum):
+    ACTIVE = 'active'
+    CONSUMED = 'consumed'
+    EXPIRED = 'expired'
+    
 class Book(Base):
     __tablename__ = 'books'
 
@@ -100,6 +111,21 @@ class BookCopy(Base):
     serial: Mapped[int] = mapped_column(Integer, nullable=False)
     copy_barcode: Mapped[str] = mapped_column(String(50), nullable=False)
     status: Mapped[enum.Enum] = mapped_column(Enum(BkCopyStatus), default=BkCopyStatus.AVAILABLE)
+
+    schedule = relationship('BkCopySchedule', back_populates='bk_copy')
+
+class BkCopySchedule(Base):
+    __tablename__ = 'bk_copy_schedules'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey('users.id'), nullable=False)
+    bk_copy_barcode: Mapped[str] = mapped_column(String(50), ForeignKey('book_copies.copy_barcode'), nullable=False)
+    schedule_id: Mapped[str] = mapped_column(String(50), nullable=False, default=generate_schedule_id)
+    status: Mapped[enum.Enum] = mapped_column(Enum(ScheduleStatus), default=ScheduleStatus.ACTIVE, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), 
+                                                 server_default=func.now())
+    
+    bk_copy = relationship('BookCopy', back_populates='schedule')
 
 class Audit(Base):
     __tablename__ = 'audit'

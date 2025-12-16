@@ -60,4 +60,19 @@ class BkCopyResponse(BaseModel):
 class BkCopyLoanResponse(BaseModel):
     loan: LoanResponse
     book_copy: BkCopyResponse
+    was_scheduled: Optional[bool] = False
+    model_config = ConfigDict(from_attributes=True)
+
+class BkCopyScheduleInfo(BaseModel):
+    user_id: int
+    bk_copy_barcode: str
+    schedule_id: str
+    status: str
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+class FullScheduleInfo(BaseModel):
+    message: str
+    note: str
+    schedule_info: BkCopyScheduleInfo
     model_config = ConfigDict(from_attributes=True)

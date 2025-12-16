@@ -4,7 +4,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from app import crud
-from app.models import Book, BookCopy, User, BkCopyStatus, Loan
+from app.models import BkCopySchedule, Book, BookCopy, User, BkCopyStatus, Loan, ScheduleStatus
 from app.core.auth import authenticate_user, create_access_token, hash_password
 from app.core.config import Settings
 from app.schemas.book import LoanCreate, LoanResponse
@@ -14,9 +14,19 @@ logger = Logger(__name__)
 
 settings=Settings()
 
+loan_eligibility_exception = HTTPException(
+    status.HTTP_403_FORBIDDEN,
+    detail='User is not eligble for anymore loans'
+)
+
 book_not_found_exception = HTTPException(
     status.HTTP_404_NOT_FOUND,
     detail='Book not found'
+)
+
+user_not_found_exception = HTTPException(
+    status.HTTP_404_NOT_FOUND,
+    detail='User not found'
 )
 
 internal_error_exception = HTTPException(
@@ -151,21 +161,48 @@ async def loan_book_service(
         ):
     try:
         user_loans = await crud.get_user_active_loans(db, current_user.id)
-        if len(user_loans) >= 3:
-            raise HTTPException(
-                status.HTTP_403_FORBIDDEN,
-                detail='User is not eligble for anymore loans'
-            )
+        if (len(user_loans) >= 3) or (current_user.fine_balance >= 10): # been a bit easy here
+            raise loan_eligibility_exception
+        
+        bk_schedule = await crud.get_active_schedule(db, isbn, current_user.id) # returns first record
+        if bk_schedule:
+            reserved_bk_copy = await crud.get_bk_copy_by_barcode(db, bk_schedule.bk_copy_barcode)
+            if not reserved_bk_copy:
+                raise HTTPException(
+                    status.HTTP_404_NOT_FOUND,
+                    detail='Scheduled book copy not found'
+                )
+            if reserved_bk_copy.status != BkCopyStatus.RESERVED:
+                raise HTTPException(
+                    status.HTTP_409_CONFLICT,
+                    detail='Scheduled book copy is not available'
+                )
+            loan_data = {
+            'user_id': current_user.id,
+            'bk_copy_barcode': reserved_bk_copy.copy_barcode
+            }
+            loan = Loan(**loan_data)
+            created_loan = await crud.create_loan(db, loan)
+            updated_bk_copy = await crud.update_bk_copy(
+                db, reserved_bk_copy, {'status': BkCopyStatus.BORROWED})
+            await crud.update_bk_schedule(db, bk_schedule, {'status': ScheduleStatus.CONSUMED})
+            logger.info('Retrieved scheduled book copy')
+            return {
+                'loan': created_loan,
+                'book_copy': updated_bk_copy, 
+                'was_scheduled': True}
+
         book_copy = await crud.get_book_copy(db, isbn)
         if not book_copy:
             raise HTTPException(
                 status.HTTP_404_NOT_FOUND,
-                detail=f'There are no available copies of ISBN-{isbn} currently'
+                detail=f'There are no available copies of ISBN-{isbn} currently and user does not have any active schedules'
             )
         loan_data = {
             'user_id': current_user.id,
             'bk_copy_barcode': book_copy.copy_barcode
         }
+
         loan = Loan(**loan_data)
         created_loan = await crud.create_loan(db, loan)
         updated_bk_copy = await crud.update_bk_copy(
@@ -186,6 +223,7 @@ async def loan_book_service(
         logger.error(f'DataBase error fetching book_copy: {e}')
         await db.rollback()
         raise internal_error_exception
+
 
 # tested 
 async def create_user_service(
@@ -245,8 +283,9 @@ async def return_book_loan_service(
         loan_id: str
         ):
     try:
-        fined = False
-        fine_fee = 0
+        fined: bool = False
+        fine_fee: int = 0
+        days_deltas: int = 0
         loan = await crud.get_loan_by_id(db, loan_id)
         if not loan:
             raise HTTPException(
@@ -284,6 +323,8 @@ async def return_book_loan_service(
             fine_fee = fine
             fined = True
             user = await crud.get_user_by_id(db, loan.user_id)
+            if not user:
+                raise user_not_found_exception
             updated_fine = fine + user.fine_balance
             await crud.update_user(db, user, update_data={'fine_balance': updated_fine})
 
@@ -303,3 +344,39 @@ async def return_book_loan_service(
         await db.rollback()
         logger.error(f'DataBase error clearing loan: {e}')
         raise internal_error_exception
+
+# tested    
+async def schedule_book_copy_service(
+        db: AsyncSession,
+        isbn: int,
+        current_user: User
+        ):
+    try:
+        book_copy = await crud.get_book_copy(db, isbn)
+        if not book_copy:
+            raise book_not_found_exception
+        await crud.update_bk_copy(db, book_copy, update_data={'status': BkCopyStatus.RESERVED})
+        schedule_data = {
+            'user_id': current_user.id,
+            'bk_copy_barcode': book_copy.copy_barcode
+        }
+        schedule = await crud.create_schedule(db, BkCopySchedule(**schedule_data))
+        return {
+            'message': 'Schedule has been successfuly created',
+            'note': 'All schedules that have\'nt been consumed will be cleared by 6pm',
+            'schedule_info': schedule
+        }
+    except IntegrityError as e:
+        await db.rollback()
+        logger.warning(f'Integrity error creating schedule: {e}')
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail='Integrity error creating schedule'
+        )
+    except HTTPException:
+        raise
+    except SQLAlchemyError as e:
+        await db.rollback()
+        logger.error(f'DataBase error creating book copy schedule: {e}')
+        raise internal_error_exception
+    
