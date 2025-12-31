@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     test_database_url: str = ''
 
     hash_algorithm: str = ''
+    jwt_algorithm: str = ''
     secret_key: str = ''
 
     access_token_expire_minutes: int = 15

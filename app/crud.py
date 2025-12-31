@@ -1,6 +1,6 @@
 from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models import Book, BookCopy, User, Loan, BkCopySchedule
+from app.models import Book, BookCopy, User, Loan, BkCopySchedule, Audit
 from typing import List
 
 async def get_book_by_id(db: AsyncSession, book_id: int):
@@ -27,6 +27,13 @@ async def get_bk_copy_by_barcode(db: AsyncSession, barcode: str):
     result = await db.execute(stmt)
     return result.scalar_one_or_none()
 
+async def get_reserved_bk_copy_by_barcode(db: AsyncSession, barcode: str):
+    stmt = select(BookCopy).where(
+        BookCopy.copy_barcode == barcode, 
+        BookCopy.status == 'RESERVED')
+    result = await db.execute(stmt)
+    return result.scalar_one_or_none()
+
 async def get_active_schedule(db: AsyncSession, isbn: int, user_id: int):
     stmt = select(BkCopySchedule).join(
         BookCopy, 
@@ -45,7 +52,7 @@ async def update_bk_schedule(
         ):
     for key, value in update_data.items():
         setattr(bk_copy_schedule, key, value)
-    await db.commit()
+    await db.flush()
 
 async def get_user_active_loans(db: AsyncSession, user_id):
     stmt = select(Loan).where(Loan.user_id == user_id, Loan.status == 'ACTIVE')
@@ -54,11 +61,11 @@ async def get_user_active_loans(db: AsyncSession, user_id):
 
 async def create_new_book(db: AsyncSession, book: Book):
     db.add(book)
-    await db.commit()
+    await db.flush()
 
 async def add_book_copies(db: AsyncSession, copies: List[BookCopy]):
     db.add_all(copies)
-    await db.commit()
+    await db.flush()
 
 async def update_book(
         db: AsyncSession, 
@@ -67,7 +74,7 @@ async def update_book(
         ):
     for key, value in update_data.items():
         setattr(book, key, value)
-    await db.commit()
+    await db.flush()
 
 async def get_book_copy(
         db: AsyncSession,
@@ -92,7 +99,7 @@ async def update_bk_copy(
         ):
     for key, value in update_data.items():
         setattr(book_copy, key, value)
-    await db.commit()
+    await db.flush()
     await db.refresh(book_copy)
     return book_copy
 
@@ -103,7 +110,7 @@ async def update_loan(
         ):
     for key, value in update_data.items():
         setattr(loan, key, value)
-    await db.commit()
+    await db.flush()
     await db.refresh(loan)
     return loan
 
@@ -114,11 +121,13 @@ async def get_user_by_email(db: AsyncSession, _email: str):
 
 async def create_new_user(db: AsyncSession, user: User):
     db.add(user)
-    await db.commit()
+    await db.flush()
+    await db.refresh(user)
+    return user
 
 async def create_loan(db: AsyncSession, loan: Loan):
     db.add(loan)
-    await db.commit()
+    await db.flush()
     await db.refresh(loan)
     return loan
 
@@ -137,7 +146,7 @@ async def get_loan_by_id(
 
 async def create_default_superuser(db: AsyncSession, admin_user: User):
     db.add(admin_user)
-    await db.commit()
+    await db.flush()
 
 async def update_user(
         db: AsyncSession, 
@@ -146,7 +155,7 @@ async def update_user(
         ):
     for key, value in update_data.items():
         setattr(user, key, value)
-    await db.commit()
+    await db.flush()
 
 async def get_default_superuser(db: AsyncSession, email: str):
     stmt = select(User).where(User.is_staff==True, User.is_superuser==True, User.email == email)
@@ -159,6 +168,10 @@ async def get_user_by_id(db: AsyncSession, user_id):
 
 async def create_schedule(db: AsyncSession, schedule: BkCopySchedule):
     db.add(schedule)
-    await db.commit()
+    await db.flush()
     await db.refresh(schedule)
     return schedule
+
+async def add_audit(db: AsyncSession, audit: Audit):
+    db.add(audit)
+    await db.flush()

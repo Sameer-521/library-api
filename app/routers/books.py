@@ -1,8 +1,8 @@
-from fastapi import APIRouter, status, Depends, Query, Form
+from fastapi import APIRouter, status, Depends, Query, Form, Request
 from app.schemas.book import (BookCreate, BookResponse,
                                BookUpdate, BookCopyForm, 
                                BkCopyLoanResponse, LoanReturnForm,
-                               FullScheduleInfo)
+                               FullScheduleInfo, LoanForm)
 from app import services
 from app.core.database import get_session, AsyncSession
 from app.core.auth import get_current_active_user, get_current_staff_user
@@ -12,82 +12,117 @@ from typing import Annotated
 books_router = APIRouter(prefix='/books')
 
 @books_router.get('')
-async def get_all_books():
+async def get_all_books(request: Request):
     return {'books': []}
 
 # tested
-@books_router.get('/', response_model=BookResponse)
+@books_router.get('/fetch', response_model=BookResponse)
 async def get_book_by_ISBN(
+    request: Request,
     isbn: Annotated[int, Query()],
-    db: AsyncSession=Depends(get_session),
-    current_user: User=Depends(get_current_active_user)
+    current_user_exc: tuple=Depends(get_current_active_user),
+    db: AsyncSession=Depends(get_session), 
     ):
-    book = await services.get_book_by_isbn_service(db, isbn)
+
+    current_user, exc = current_user_exc
+    request.state.exceptions = exc
+    book = await services.get_book_by_isbn_service(request, db, isbn)
     return book
 
 # tested
 @books_router.post('', status_code=status.HTTP_201_CREATED)
 async def create_book(
+    request: Request,
     book_create: Annotated[BookCreate, Form()],
+    staff_user_exc: tuple=Depends(get_current_staff_user),
     db: AsyncSession=Depends(get_session),
-    staff_user=Depends(get_current_staff_user)
     ):
+
+    staff_user, exc = staff_user_exc
+    request.state.exceptions = exc
     book_data = book_create.model_dump()
-    await services.create_new_book_service(db, book_data)
+    await services.create_new_book_service(request, db, book_data)
     return {'message': 'Created new book successully'}
 
 # tested
 @books_router.put('/{isbn}', status_code=status.HTTP_204_NO_CONTENT)
 async def update_book(
+    request: Request,
     isbn: int,
     update_data: Annotated[BookUpdate, Form()],
+    staff_user_exc: tuple=Depends(get_current_staff_user),
     db: AsyncSession=Depends(get_session),
-    staff_user=Depends(get_current_staff_user)
     ):
+
+    staff_user, exc = staff_user_exc
+    request.state.exceptions = exc
     book_update_data = update_data.model_dump(exclude_unset=True)
-    await services.update_book_service(db, book_update_data, isbn)
+    await services.update_book_service(request, db, book_update_data, isbn, staff_user)
 
 # tested
 @books_router.post('/generate-copies', status_code=status.HTTP_201_CREATED)
 async def add_book_copies(
+    request: Request,
     add_copies_form: Annotated[BookCopyForm, Form()],
+    staff_user_exc: tuple=Depends(get_current_staff_user),
     db: AsyncSession=Depends(get_session),
-    staff_user=Depends(get_current_staff_user)
     ):
+
+    staff_user, exc = staff_user_exc
+    request.state.exceptions = exc
     data = add_copies_form.model_dump()
-    message = await services.add_book_copies_service(db, **data)
+    message = await services.add_book_copies_service(
+        request=request, db=db, **data)
     return message
 
 @books_router.delete('/')
-async def delete_book():
+async def delete_book(request: Request):
     pass
 
 @books_router.post('/loan-return')
 async def return_book_loan(
+    request: Request,
     return_loan_form: Annotated[LoanReturnForm, Form()],
+    staff_user_exc: tuple=Depends(get_current_staff_user),
     db: AsyncSession=Depends(get_session),
-    staff_user=Depends(get_current_staff_user),
     ):
+
+    staff_user, exc = staff_user_exc
+    request.state.exceptions = exc
     data = return_loan_form.model_dump()
-    message = await services.return_book_loan_service(db, data['bk_copy_barcode'], data['loan_id'])
+    message = await services.return_book_loan_service(
+        request, db, data['bk_copy_barcode'], data['loan_id'])
     return message
 
 # tested
-@books_router.post('/loan/{isbn}', response_model=BkCopyLoanResponse)
+@books_router.post('/loan-book', response_model=BkCopyLoanResponse) # update to staff dep.
 async def loan_book(
-    isbn: int,
+    request: Request,
+    form_data: Annotated[LoanForm, Form()],
+    staff_user_exc: tuple=Depends(get_current_staff_user),
     db: AsyncSession=Depends(get_session),
-    current_user: User=Depends(get_current_active_user)
     ):
-    loan_info = await services.loan_book_service(db, isbn, current_user)
+
+    staff_user, exc = staff_user_exc
+    request.state.exceptions = exc
+    data = form_data.model_dump()
+    loan_info = await services.loan_book_service(request, db, **data)
     return loan_info
 
 @books_router.post('/book-schedule/{isbn}', 
 response_model=FullScheduleInfo, status_code=status.HTTP_201_CREATED)
 async def schedule_book(
+    request: Request,
     isbn: int,
+    current_user_exc: tuple=Depends(get_current_active_user),
     db: AsyncSession=Depends(get_session),
-    current_user: User=Depends(get_current_active_user)
     ):
-    schedule_info = await services.schedule_book_copy_service(db, isbn, current_user)
+
+    current_user, exc = current_user_exc
+    request.state.exceptions = exc
+    schedule_info = await services.schedule_book_copy_service(
+        request, db, isbn, current_user)
     return schedule_info
+
+# fastapi depends should return a single value, you can unpack 
+# after

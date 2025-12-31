@@ -12,6 +12,7 @@ dependencies = [
     "fastapi[all,standard]>=0.124.0",
     "passlib[bcrypt]>=1.7.4",
     "pydantic-settings>=2.12.0",
+    "pyjwt>=2.10.1",
     "pytest>=9.0.2",
     "pytest-asyncio>=1.3.0",
     "python-dotenv>=1.2.1",

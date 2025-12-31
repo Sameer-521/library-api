@@ -29,6 +29,10 @@ class BookCopyForm(BaseModel):
     isbn: PositiveInt
     quantity: PositiveInt
 
+class LoanForm(BaseModel):
+    user_id: int
+    isbn: int
+    
 class LoanBase(BaseModel):
     loan_id: str
     user_id: str

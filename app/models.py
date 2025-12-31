@@ -1,7 +1,6 @@
-from tkinter import ACTIVE
 from app.core.database import Base
-from sqlalchemy import (Column, String, Integer, ARRAY,
-                        DateTime, Boolean, func, ForeignKey,
+from sqlalchemy import (String, Integer, DateTime, 
+                        Boolean, func, ForeignKey,
                         JSON, Enum)
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from datetime import datetime, timedelta, timezone
@@ -40,9 +39,18 @@ class LoanStatus(enum.Enum):
     RETURNED_LATE = 'returned_late'
 
 class Event(enum.Enum):
-    CREATE_BOOK = 'create_book'
     CHECKOUT = 'checkout'
-    RETURN = 'return'
+    CREATE_BOOK = 'create_book'
+    CREATE_BK_COPIES = 'create_bk_copies'
+    CREATE_USER = 'create_user'
+    FETCH_BOOK = 'fecth_book'
+    FETCH_USER = 'fetch_user'
+    LOGIN_USER = 'login_user'
+    RETURN_BOOK = 'return_book'
+    SCHEDULE_BOOK = 'schedule_book'
+    UPDATE_BOOK = 'update_book'
+    UNIDENTIFIED_EVENT = 'unidentified_event' # safety net
+    REJECTED_EVENT = 'rejected_event'
 
 class BkCopyStatus(enum.Enum):
     AVAILABLE = 'available'
@@ -132,7 +140,7 @@ class Audit(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     actor_id: Mapped[str] = mapped_column(String(50), nullable=False)
+    success: Mapped[bool] = mapped_column(Boolean, default=False)
     event: Mapped[enum.Enum] = mapped_column(Enum(Event), nullable=False)
     details: Mapped[JSON] = mapped_column(JSON, nullable=False)
     audited_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-
