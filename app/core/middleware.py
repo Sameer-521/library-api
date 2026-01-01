@@ -3,13 +3,12 @@ from typing import Any, Dict
 from fastapi import Request
 from urllib.parse import parse_qs
 from starlette.requests import Request as StarletteRequest
-from starlette.datastructures import UploadFile
 from jwt.exceptions import InvalidSignatureError
 from jose.exceptions import JWTError
 from datetime import datetime
 from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi import Request, BackgroundTasks
-from typing import Any, Optional, Callable, Awaitable
+from typing import Any, Callable, Awaitable
 from starlette.responses import Response
 from app.services import create_audit_service
 from app.core.database import AsyncSessionLocal
@@ -155,15 +154,6 @@ def detect_event_from_request(request: Request) -> Event:
         return Event.FETCH_USER
 
     return Event.UNIDENTIFIED_EVENT
-
-# def generate_extra_details(request, form_data, actor, claims, response, start_time):
-#     if form_data and actor is None and claims is None:
-#         extra_details = {
-#             'timestamp': datetime.now().isoformat(),
-#             'request_url': f'{request.url}',
-#             'latency': f'{round((time.time() - start_time) * 1000, 2)} ms',
-#             'status_code': response.status_code
-#         }
     
 class AuditMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
@@ -178,11 +168,9 @@ class AuditMiddleware(BaseHTTPMiddleware):
         auth_header = request.headers.get('Authorization')
         if auth_header and auth_header.startswith('Bearer '):
             token = auth_header[7:]
-            print(token)
         
         if token:
             claims = get_actor_claims(token)
-            print(claims)
             
         response = await call_next(request)
 
@@ -206,8 +194,11 @@ class AuditMiddleware(BaseHTTPMiddleware):
         }
 
         if hasattr(request.state, 'msg'):
-            msg = getattr(request.state, 'msg')
-            extra_details.update({'msg': msg['message']})
+            msg: dict = getattr(request.state, 'msg', {})
+            extra_details.update({'msg': msg.get('message', None)})
+
+        if form_data:
+            extra_details.update({'form': form_data})
 
         audit_entry = {
             'actor_id': actor_id(actor, claims),

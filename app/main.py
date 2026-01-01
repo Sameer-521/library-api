@@ -35,14 +35,9 @@ async def root():
     await get_settings()
     return {'message': 'This is the root page'}
 
-# @app.exception_handler(RequestValidationError)
-# async def validation_exception_handler(request: Request, exc: RequestValidationError):
-#     request.state.exception = exc
-#     raise exc
-
 # TODO:
 
-# Implement audit logic: testing phase
+# Implement soft delete functionality
 # Implement book copy clearance: check book status and mark them accordingly e.g lost
 # Implement book clearance via external worker
 # Add maintenance utilities

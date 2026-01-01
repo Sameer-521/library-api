@@ -1,9 +1,6 @@
-from fastapi import Depends, HTTPException, status, Request
+from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import jwt
-from jwt.exceptions import (
-    InvalidTokenError,
-)
 from jose.exceptions import JWTError, ExpiredSignatureError
 from app.core.config import Settings
 from datetime import datetime, timedelta, timezone

@@ -1,37 +1,12 @@
+import string, secrets, enum
 from app.core.database import Base
+from app.utils import (generate_barcode, generate_library_cardnumber, 
+                       generate_loan_id, generate_schedule_id, default_loan_due_date)
 from sqlalchemy import (String, Integer, DateTime, 
                         Boolean, func, ForeignKey,
                         JSON, Enum)
 from sqlalchemy.orm import relationship, Mapped, mapped_column
-from datetime import datetime, timedelta, timezone
-import string, secrets, enum
-
-def generate_barcode(serial: str | None = None):
-    digits = string.digits
-    serial = ''.join([secrets.choice(digits) for _ in range(7)])
-    return f'BK-{serial}'
-
-def generate_random_id():
-    digits = string.digits
-    letters = string.ascii_uppercase
-    letter_part = ''.join([secrets.choice(letters) for _ in range(2)])
-    num_part = ''.join([secrets.choice(digits) for _ in range(8)])
-    return f'{letter_part}-{num_part}'
-
-def generate_library_cardnumber():
-    id = generate_random_id()
-    return f'LB-{id}'
-
-def generate_loan_id():
-    id = generate_random_id()
-    return f'LN-{id}'
-
-def generate_schedule_id():
-    id = generate_random_id()
-    return f'SC-{id}'
-
-def default_loan_due_date():
-    return datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0) + timedelta(days=7)
+from datetime import datetime
 
 class LoanStatus(enum.Enum):
     ACTIVE = 'active'

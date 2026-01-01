@@ -1,15 +1,15 @@
 from datetime import timedelta, datetime, timezone
-from typing import Optional
 from fastapi import HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from app import crud
+from app.utils import (generate_book_copy_barcode, 
+                       reraise_exceptions, safe_datetime_compare)
 from app.models import (BkCopySchedule, Book, BookCopy, 
                         User, BkCopyStatus, Loan, ScheduleStatus, 
                         Audit, Event)
 from app.core.auth import authenticate_user, create_access_token, hash_password
 from app.core.config import Settings
-from app.schemas.book import LoanCreate, LoanResponse
 from logging import Logger
 
 logger = Logger(__name__)
@@ -51,28 +51,6 @@ book_copy_integrity_exception = HTTPException(
     detail='Error creating book copies'
 )
 
-# helper function to safely compare ofset naive and ofset aware datetimes
-def safe_datetime_compare(dt1: datetime, dt2: datetime) -> bool:
-    if dt1.tzinfo is None and dt2.tzinfo is not None:
-        dt1 = dt1.replace(tzinfo=timezone.utc)
-    elif dt1.tzinfo is not None and dt2.tzinfo is None:
-        dt2 = dt2.replace(tzinfo=timezone.utc)
-    return dt1 > dt2
-
-def generate_book_copy_barcode(base_barcode, serial):
-    try:
-        str_serial = str(serial).zfill(3)
-        return f'COPY-{base_barcode}-{str_serial}'
-    except ValueError as e:
-        logger.warning(f'ValueError: {e}')
-
-def reraise_exceptions(request: Request):
-    if hasattr(request.state, 'exceptions'):
-        exc: list | None = getattr(request.state, 'exceptions')
-        print('heeerre')
-        if exc:
-            raise exc[0]
-
 # tested
 async def create_new_book_service(
         request: Request, 
@@ -80,7 +58,6 @@ async def create_new_book_service(
         book_data: dict,
         ):
     try:
-        request.state.event_type = Event.CREATE_BOOK
         reraise_exceptions(request)
         book = Book(**book_data)
         await crud.create_new_book(db, book)
@@ -104,7 +81,6 @@ async def get_book_by_isbn_service(
     isbn: int
     ):
     try:
-        request.state.event_type = Event.FETCH_BOOK
         reraise_exceptions(request)
         book = await crud.get_book_by_isbn(db, isbn)
         if not book:
@@ -129,7 +105,6 @@ async def update_book_service(
     current_user: User
     ):
     try:
-        request.state.event_type = Event.UPDATE_BOOK
         reraise_exceptions(request)
         book = await crud.get_book_by_isbn(db, isbn)
         if not book:
@@ -159,7 +134,6 @@ async def add_book_copies_service(
         isbn: int,
         ):
     try:
-        request.state.event_type = Event.CREATE_BK_COPIES
         reraise_exceptions(request)
         book_copies = []
         last_serial = 0
@@ -287,7 +261,6 @@ async def create_user_service(
     user_data: dict,
     ):
     try:
-        request.state.event_type = Event.CREATE_USER
         #reraise_exceptions(request)
         data = user_data.copy()
         data['password'] = hash_password(data['password'])
@@ -315,7 +288,6 @@ async def login_user_service(
     user_data: dict,
     ):
     try:
-        request.state.event_type = Event.LOGIN_USER
         token = None
         ACCESS_TOKEN_EXPIRE_MINUTES = timedelta(minutes=settings.access_token_expire_minutes)
         user, exc = await authenticate_user(user_data, db)
@@ -359,7 +331,6 @@ async def return_book_loan_service(
     loan_id: str,
     ):
     try:
-        request.state.event_type = Event.RETURN_BOOK
         reraise_exceptions(request)
         fined: bool = False
         fine_fee: int = 0
@@ -434,7 +405,6 @@ async def schedule_book_copy_service(
     current_user: User
     ):
     try:
-        request.state.event_type = Event.SCHEDULE_BOOK
         reraise_exceptions(request)
         book_copy = await crud.get_book_copy(db, isbn)
         if not book_copy:
