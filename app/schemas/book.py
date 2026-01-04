@@ -1,6 +1,7 @@
-from pydantic import BaseModel, PositiveInt, ConfigDict, Field
+from pydantic import BaseModel, PositiveInt, ConfigDict, field_validator
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, Literal
+from enum import Enum
 
 class BookBase(BaseModel):
     title: str
@@ -79,4 +80,17 @@ class FullScheduleInfo(BaseModel):
     message: str
     note: str
     schedule_info: BkCopyScheduleInfo
+    model_config = ConfigDict(from_attributes=True)
+
+class BkCopyUpdate(BaseModel):
+    copy_barcode: str
+    status: Literal['AVAILABLE', 'LOST', 'DAMAGED']
+
+class ListBkUpdate(BaseModel):
+    book_copies: list[BkCopyUpdate]
+
+class BkCopyUpdateResponse(BaseModel):
+    message: str
+    not_found_barcodes: list[str]
+    num_not_found: int
     model_config = ConfigDict(from_attributes=True)

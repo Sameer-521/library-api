@@ -4,13 +4,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from app import crud
 from app.utils import (generate_book_copy_barcode, generate_staff_id,
-                       reraise_exceptions, safe_datetime_compare)
+                       reraise_exceptions, safe_datetime_compare, map_bk_copy_status)
 from app.models import (BkCopySchedule, Book, BookCopy,
                         User, BkCopyStatus, Loan, ScheduleStatus, 
                         Audit, Event, LoanStatus)
 from app.core.auth import authenticate_user, create_access_token, hash_password, authenticate_admin
 from app.core.config import Settings
-from typing import Optional
+from typing import Optional, List
 from logging import Logger
 
 logger = Logger(__name__)
@@ -498,5 +498,44 @@ async def create_staff_user_service(
         await db.commit()
         msg = {'message': 'Staff user created successfully',
                 'user_uid': user.user_uid}
+        request.state.msg = msg
+        return msg
+    
+async def update_bk_copies_status(
+    request: Request,
+    db: AsyncSession,
+    data: List[dict]  
+    ):
+    try:
+        reraise_exceptions(request)
+        barcodes = {item['copy_barcode'] for item in data} # remove duplicates
+        book_copies = await crud.get_bk_copies_by_barcode(db, barcodes)
+        if not book_copies:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                detail='No book copies found for the provided barcodes'
+            )
+        fetched_barcodes = {bk.copy_barcode for bk in book_copies}
+        not_found = barcodes - fetched_barcodes
+
+        filtered_data = [item for item in data if item['copy_barcode'] in fetched_barcodes]
+        bk_map = {bk.copy_barcode: bk for bk in book_copies}
+        ordered_copies = [bk_map[item['copy_barcode']] for item in filtered_data]
+        book_copies = list(book_copies)
+
+        await crud.update_bk_copies_status(db, ordered_copies, filtered_data)
+    except HTTPException:
+        raise
+    except SQLAlchemyError as e:
+        logger.error(f'DataBase error updating book_copies: {e}')
+        await db.rollback()
+        raise internal_error_exception # update exceptions
+    else:
+        await db.commit()
+        msg = {
+            'message': f'Updated {len(book_copies)} book copies successfully',
+            'not_found_barcodes': list(not_found),
+            'num_not_found': len(not_found)
+            }
         request.state.msg = msg
         return msg

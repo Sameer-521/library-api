@@ -26,15 +26,17 @@ class Event(enum.Enum):
     RETURN_BOOK = 'return_book'
     SCHEDULE_BOOK = 'schedule_book'
     UPDATE_BOOK = 'update_book'
+    UPDATE_BOOK_COPIES = 'update_book_copies'
     UNIDENTIFIED_EVENT = 'unidentified_event' # safety net
     REJECTED_EVENT = 'rejected_event'
 
 class BkCopyStatus(enum.Enum):
-    AVAILABLE = 'available'
-    LOST = 'lost'
-    BORROWED = 'borrowed'
-    IN_CHECK = 'in-check'
-    RESERVED = 'reserved'
+    AVAILABLE = 'AVAILABLE'
+    LOST = 'LOST'
+    DAMAGED = 'DAMAGED'
+    BORROWED = 'BORROWED'
+    IN_CHECK = 'IN_CHECK'
+    RESERVED = 'RESERVED'
 
 class ScheduleStatus(enum.Enum):
     ACTIVE = 'active'

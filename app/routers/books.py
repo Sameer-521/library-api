@@ -1,8 +1,8 @@
-from fastapi import APIRouter, status, Depends, Query, Form, Request
+from fastapi import APIRouter, status, Depends, Query, Form, Request, Body
 from app.schemas.book import (BookCreate, BookResponse,
                                BookUpdate, BookCopyForm, 
                                BkCopyLoanResponse, LoanReturnForm,
-                               FullScheduleInfo, LoanForm)
+                               FullScheduleInfo, LoanForm, ListBkUpdate, BkCopyUpdateResponse)
 from app import services
 from app.core.database import get_session, AsyncSession
 from app.core.auth import get_current_active_user, get_current_staff_user
@@ -123,6 +123,21 @@ async def schedule_book(
     schedule_info = await services.schedule_book_copy_service(
         request, db, isbn, current_user)
     return schedule_info
+
+@books_router.patch('/update-bk-copies-status', response_model=BkCopyUpdateResponse)
+async def update_bk_copies(
+    request: Request,
+    data: ListBkUpdate = Body(),
+    staff_user_exc: tuple=Depends(get_current_staff_user),
+    db: AsyncSession=Depends(get_session)
+    ):
+
+    staff_user, exc = staff_user_exc
+    request.state.exceptions = exc
+
+    parsed = data.model_dump()
+    return await services.update_bk_copies_status(
+        request, db, parsed['book_copies'])
 
 # fastapi depends should return a single value, you can unpack 
 # after

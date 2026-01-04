@@ -1,7 +1,7 @@
 from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Book, BookCopy, User, Loan, BkCopySchedule, Audit, LoanStatus
-from typing import List
+from typing import List, Sequence, Set
 
 async def get_book_by_id(db: AsyncSession, book_id: int):
     book = await db.get(Book, book_id)
@@ -197,4 +197,22 @@ async def create_schedule(db: AsyncSession, schedule: BkCopySchedule):
 
 async def add_audit(db: AsyncSession, audit: Audit):
     db.add(audit)
+    await db.flush()
+
+async def get_bk_copies_by_barcode(
+        db: AsyncSession, 
+        barcodes: Set[str]
+        ):
+    stmt = select(BookCopy).where(BookCopy.copy_barcode.in_(barcodes))
+    result = await db.execute(stmt)
+    return result.scalars().all()
+
+async def update_bk_copies_status(
+        db: AsyncSession, 
+        bk_copies: List[BookCopy],
+        update_data: List[dict]
+        ):
+    for i, data in enumerate(update_data):
+        for key, value in data.items():
+            setattr(bk_copies[i], key, value)
     await db.flush()

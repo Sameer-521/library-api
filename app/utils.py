@@ -1,10 +1,17 @@
-import string
-import secrets
+import string, enum, secrets
 from logging import Logger
 from datetime import datetime, timezone, timedelta
 from fastapi import Request
 
 logger = Logger(__name__)
+
+class BkCopyStatus(enum.Enum):
+    AVAILABLE = 'available'
+    LOST = 'lost'
+    DAMAGED = 'damaged'
+    BORROWED = 'borrowed'
+    IN_CHECK = 'in-check'
+    RESERVED = 'reserved'
 
 def safe_datetime_compare(dt1: datetime, dt2: datetime) -> bool:
     if dt1.tzinfo is None and dt2.tzinfo is not None:
@@ -64,3 +71,17 @@ def reraise_exceptions(request: Request):
         exc: list | None = getattr(request.state, 'exceptions')
         if exc:
             raise exc[0]
+        
+def map_bk_copy_status(value: str):
+    if value == 'available':
+        return BkCopyStatus.AVAILABLE
+    elif value == 'in_check':
+        return BkCopyStatus.IN_CHECK
+    elif value == 'reserved':
+        return BkCopyStatus.RESERVED
+    elif value == 'lost':
+        return BkCopyStatus.LOST
+    elif value == 'damaged':
+        return BkCopyStatus.DAMAGED
+    else:
+        return BkCopyStatus.BORROWED

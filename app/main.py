@@ -35,8 +35,5 @@ async def root():
 
 # TODO:
 
-# Implement staff user creation
-# Implement book copy clearance: check book status and mark them accordingly e.g lost
-# Implement book clearance via external worker
 # Add maintenance utilities
 # Implement soft delete functionality

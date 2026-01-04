@@ -140,6 +140,8 @@ def detect_event_from_request(request: Request) -> Event:
         return Event.CREATE_BOOK
     if path.startswith("/books/") and method == "PUT":
         return Event.UPDATE_BOOK
+    if path.startswith("/books/update-bk-copies-status") and method == "PATCH":
+        return Event.UPDATE_BOOK_COPIES
     if path.startswith("/books/fetch") and method == "GET":
         return Event.FETCH_BOOK
 
@@ -217,7 +219,6 @@ class AuditMiddleware(BaseHTTPMiddleware):
             response.background.add_task(_bg_audit, audit_entry)
         return response
 
-    
     # avoid calling get_session() in middleware
     # instead use a function that safely opens / closes, a db session and does the functionality
     # add that function to the background tasks instead
