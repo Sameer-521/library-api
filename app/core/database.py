@@ -4,7 +4,7 @@ from app.core.config import Settings
 
 settings = Settings()
 engine = create_async_engine(
-    settings.database_url,
+    settings.database_url if settings.test_mode == 'False' else settings.test_database_url,
     echo=True,
     future=True
 )

@@ -160,7 +160,7 @@ async def create_superuser(
     try:
         superuser = await crud.get_default_superuser(db, email)
         if not superuser:
-            admin_id = generate_admin_id()
+            admin_id = settings.admin_uid
             data = {
                 'user_uid': admin_id,
                 'full_name': full_name,
@@ -175,5 +175,53 @@ async def create_superuser(
     except SQLAlchemyError as e:
         await db.rollback()
         print(f'DataBase error initializing admin_user: {e}')
+    else:
+        await db.commit()
+
+async def create_mock_superuser(
+        db: AsyncSession, 
+        email=settings.mock_admin_email,
+        password=settings.mock_admin_password,
+        full_name=settings.mock_admin_name
+        ):
+    try:
+        mock_admin_id = settings.mock_admin_uid
+        data = {
+            'user_uid': mock_admin_id,
+            'full_name': full_name,
+            'password': hash_password(password),
+            'email': email,
+            'is_staff': True,
+            'is_superuser': True
+        }
+        mock_admin_user = User(**data)
+        await crud.create_default_superuser(db, mock_admin_user)
+        print('Mock Superuser initialized for testing')
+    except SQLAlchemyError as e:
+        await db.rollback()
+        print(f'DataBase error initializing mock_admin_user: {e}')
+    else:
+        await db.commit()
+
+async def create_mock_user(
+        db: AsyncSession, 
+        email=settings.mock_user_email,
+        password=settings.mock_user_password,
+        full_name=settings.mock_user_name
+        ):
+    try:
+        mock_user_id = settings.mock_user_uid
+        data = {
+            'user_uid': mock_user_id,
+            'full_name': full_name,
+            'password': hash_password(password),
+            'email': email,
+        }
+        mock_user = User(**data)
+        await crud.create_new_user(db, mock_user)
+        print('Mock user initialized for testing')
+    except SQLAlchemyError as e:
+        await db.rollback()
+        print(f'DataBase error initializing mock_user: {e}')
     else:
         await db.commit()
