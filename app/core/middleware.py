@@ -1,82 +1,88 @@
-import time, json
-from typing import Any, Dict
-from fastapi import Request
-from urllib.parse import parse_qs
-from starlette.requests import Request as StarletteRequest
-from jwt.exceptions import InvalidSignatureError
-from jose.exceptions import JWTError
+import json
+import time
 from datetime import datetime
-from starlette.middleware.base import BaseHTTPMiddleware
-from fastapi import Request, BackgroundTasks, status
-from fastapi.responses import JSONResponse
-from typing import Any, Callable, Awaitable
-from starlette.responses import Response
-from app.services import create_audit_service
-from app.core.database import AsyncSessionLocal
-from app.core.auth import decode_token
-from app.models import User, Event
 from logging import getLogger
+from typing import Any, Awaitable, Callable, Dict
+from urllib.parse import parse_qs
+
+from fastapi import BackgroundTasks, Request
+from jose.exceptions import JWTError
+from jwt.exceptions import InvalidSignatureError
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request as StarletteRequest
+from starlette.responses import Response
+
+from app.core.auth import decode_token
+from app.core.database import AsyncSessionLocal
+from app.models import Event, User
+from app.services import create_audit_service
 
 logger = getLogger(__name__)
+
 
 async def _bg_audit(entry: dict):
     async with AsyncSessionLocal() as session:
         await create_audit_service(session, entry)
 
+
 def actor_email(actor, claims):
     try:
         if isinstance(actor, User):
-            return getattr(actor, 'email', 'unavailable')
+            return getattr(actor, "email", "unavailable")
         if isinstance(actor, dict):
-            return actor.get('email', 'unavailable')
+            return actor.get("email", "unavailable")
         if isinstance(claims, dict):
-            return claims.get('email', 'unavailable')
+            return claims.get("email", "unavailable")
     except Exception as e:
-        logger.error(f'Error getting actor email: {e}')
-    return 'unavailable'
+        logger.error(f"Error getting actor email: {e}")
+    return "unavailable"
+
 
 def actor_is_staff(actor, claims):
     try:
         if isinstance(actor, User):
-            return getattr(actor, 'is_staff', 'unavailable')
+            return getattr(actor, "is_staff", "unavailable")
         if isinstance(actor, dict):
-            return actor.get('is_staff', 'unavailable')
+            return actor.get("is_staff", "unavailable")
         if isinstance(claims, dict):
-            return claims.get('is_staff', 'unavailable')
+            return claims.get("is_staff", "unavailable")
     except Exception as e:
-        logger.error(f'Error getting actor is_staff: {e}')
-    return 'unavailable'
+        logger.error(f"Error getting actor is_staff: {e}")
+    return "unavailable"
+
 
 def actor_id(actor, claims):
     try:
         if isinstance(actor, User):
-            return getattr(actor, 'user_uid', -401)
+            return getattr(actor, "user_uid", -401)
         if isinstance(claims, dict):
-            return claims.get('user_uid', -1)
+            return claims.get("user_uid", -1)
         if isinstance(actor, dict):
-            return actor.get('user_uid', -401)
+            return actor.get("user_uid", -401)
     except Exception as e:
-        logger.error(f'Error getting actor is_staff: {e}')
+        logger.error(f"Error getting actor is_staff: {e}")
     return -1
+
 
 def get_actor_claims(token: str):
     try:
         payload = decode_token(token, False)
-        email = payload.get('sub')
-        user_uid = payload.get('user_uid')
-        is_staff = payload.get('is_staff')
+        email = payload.get("sub")
+        user_uid = payload.get("user_uid")
+        is_staff = payload.get("is_staff")
         return {
-            'email': email, 
-            'user_uid': user_uid,
-            'is_staff': is_staff,
-            }
+            "email": email,
+            "user_uid": user_uid,
+            "is_staff": is_staff,
+        }
     except (InvalidSignatureError, JWTError) as e:
-        logger.error(f'Token decode error: {e}')
+        logger.error(f"Token decode error: {e}")
         return None
     except Exception as e:
-        logger.error(f'Unexpected token error: {e}')
+        logger.error(f"Unexpected token error: {e}")
         return None
-    
+
+
 async def extract_form_data(request: Request) -> Dict[str, Any]:
     """
     Safely extract form fields (urlencoded or multipart) from `request`
@@ -90,6 +96,7 @@ async def extract_form_data(request: Request) -> Dict[str, Any]:
     # restore mechanism so downstream can read the same body again
     async def _receive() -> dict:
         return {"type": "http.request", "body": body, "more_body": False}
+
     request._receive = _receive
 
     content_type = (request.headers.get("content-type") or "").lower()
@@ -122,6 +129,7 @@ async def extract_form_data(request: Request) -> Dict[str, Any]:
 
     # no form data or unsupported content-type
     return {}
+
 
 def detect_event_from_request(request: Request) -> Event:
     path = request.url.path.lower()
@@ -156,9 +164,12 @@ def detect_event_from_request(request: Request) -> Event:
         return Event.FETCH_USER
 
     return Event.UNIDENTIFIED_EVENT
-    
+
+
 class AuditMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         start_time = time.time()
         token = None
         actor = None
@@ -166,49 +177,49 @@ class AuditMiddleware(BaseHTTPMiddleware):
         event_type = detect_event_from_request(request)
 
         form_data = await extract_form_data(request)
-        if 'password' in form_data.keys():
-            del form_data['password']
+        if "password" in form_data.keys():
+            del form_data["password"]
 
-        auth_header = request.headers.get('Authorization')
-        if auth_header and auth_header.startswith('Bearer '):
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
             token = auth_header[7:]
-        
+
         if token:
             claims = get_actor_claims(token)
-            
+
         response = await call_next(request)
 
-        if hasattr(request.state, 'actor'):
-            actor = getattr(request.state, 'actor', None)
-        
+        if hasattr(request.state, "actor"):
+            actor = getattr(request.state, "actor", None)
+
         response.background = BackgroundTasks()
 
         if event_type == Event.UNIDENTIFIED_EVENT:
-            logger.warning(f'Unidentified event detected')
+            logger.warning("Unidentified event detected")
 
         success = response.status_code < 400
-        
+
         extra_details = {
-            'timestamp': datetime.now().isoformat(),
-            'request_url': f'{request.url}',
-            'actor_email': actor_email(actor, claims),
-            'is_staff': actor_is_staff(actor, claims),
-            'latency': f'{round((time.time() - start_time) * 1000, 2)} ms',
-            'status_code': response.status_code
+            "timestamp": datetime.now().isoformat(),
+            "request_url": f"{request.url}",
+            "actor_email": actor_email(actor, claims),
+            "is_staff": actor_is_staff(actor, claims),
+            "latency": f"{round((time.time() - start_time) * 1000, 2)} ms",
+            "status_code": response.status_code,
         }
 
-        if hasattr(request.state, 'msg'):
-            msg: dict = getattr(request.state, 'msg', {})
-            extra_details.update({'msg': msg.get('message', None)})
+        if hasattr(request.state, "msg"):
+            msg: dict = getattr(request.state, "msg", {})
+            extra_details.update({"msg": msg.get("message", None)})
 
         if form_data:
-            extra_details.update({'form': form_data})
+            extra_details.update({"form": form_data})
 
         audit_entry = {
-            'actor_id': actor_id(actor, claims),
-            'success': success,
-            'event': event_type,
-            'details': json.dumps(extra_details)
+            "actor_id": actor_id(actor, claims),
+            "success": success,
+            "event": event_type,
+            "details": json.dumps(extra_details),
         }
 
         if response.background is None:
