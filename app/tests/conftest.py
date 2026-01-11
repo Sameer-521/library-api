@@ -1,5 +1,4 @@
 # ruff: noqa: E402
-import os
 
 import pytest
 from dotenv import load_dotenv
@@ -14,16 +13,13 @@ from app.core.auth import hash_password
 from app.core.config import Settings
 from app.core.database import Base, get_session
 from app.main import app
-from app.models import Book, User, BookCopy
+from app.models import Book, User, BookCopy, Loan, BkCopyStatus
 from app.utils import generate_book_copy_barcode
 
 settings = Settings()
 
-mock_admin_email = os.getenv("MOCK_ADMIN_EMAIL")
-mock_admin_password = os.getenv("MOCK_ADMIN_PASSWORD")
-
-mock_user_email = os.getenv("MOCK_USER_EMAIL")
-mock_user_password = os.getenv("MOCK_USER_PASSWORD")
+mock_admin_email = "mockadmin@example.com"
+mock_admin_password = "imjustfortesting"
 
 BASE_URL = "http://127.0.0.1:8000"
 TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
@@ -37,6 +33,12 @@ TestAsyncSessionLocal = async_sessionmaker(
     autoflush=False,
     expire_on_commit=False,
 )
+
+user_data = {
+    "full_name": "Mock User2",
+    "email": "mockuser2@gmail.com",
+    "password": "mockuser123",
+}
 
 
 @pytest.fixture(scope="session")
@@ -90,11 +92,6 @@ async def mock_admin(test_session):
 
 @pytest.fixture(scope="function")
 async def mock_user(test_session):
-    user_data = {
-        "full_name": "Mock User2",
-        "email": "mockuser2@gmail.com",
-        "password": "mockuser123",
-    }
     user = User(**user_data)
     test_session.add(user)
     await test_session.flush()
@@ -109,22 +106,6 @@ async def mock_book(test_session, book_creation_data):
     await test_session.flush()
     await test_session.refresh(book)
     return book
-
-
-# @pytest.fixture(scope="function")
-# async def mock_schedule(
-#     test_session, mock_user, mock_book_copies
-# ) -> (BkCopySchedule, str):
-#     isbn, bk_copies = mock_book_copies
-#     schedule_data = {
-#         "user_uid": mock_user.user_uid,
-#         "bk_copy_barcode": bk_copy.copy_barcode,
-#     }
-#     schedule = BkCopySchedule(**schedule_data)
-#     test_session.add(schedule)
-#     await test_session.flush()
-#     await test_session.refresh(schedule)
-#     return schedule, isbn
 
 
 @pytest.fixture(scope="function")
@@ -144,6 +125,7 @@ async def mock_book_copies(test_session, mock_book) -> (str, List[BookCopy]):
         book_copy = BookCopy(
             book_isbn=isbn, serial=bk_copy_serial, copy_barcode=cp_barcode
         )
+        last_serial += 1
         bk_copies.append(book_copy)
     test_session.add_all(bk_copies)
     await test_session.flush()
@@ -151,6 +133,28 @@ async def mock_book_copies(test_session, mock_book) -> (str, List[BookCopy]):
         await test_session.refresh(bk)
         refreshed_bk_copies.append(bk)
     return isbn, refreshed_bk_copies
+
+
+@pytest.fixture(scope="function")
+async def mock_loan(test_session, mock_user, mock_book_copies) -> (str, str):
+    isbn, mock_bks = mock_book_copies
+    first_bk: BookCopy = mock_bks[0]
+    update_bk_data = {"status": BkCopyStatus.BORROWED}
+    for key, value in update_bk_data.items():
+        setattr(first_bk, key, value)
+
+    await test_session.flush()
+    await test_session.refresh(first_bk)
+
+    loan_data = {
+        "user_uid": mock_user.user_uid,
+        "bk_copy_barcode": first_bk.copy_barcode,
+    }
+    loan = Loan(**loan_data)
+    test_session.add(loan)
+    await test_session.flush()
+    await test_session.refresh(loan)
+    return loan.loan_id, loan.bk_copy_barcode
 
 
 @pytest.fixture(scope="function")

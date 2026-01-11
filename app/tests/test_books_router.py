@@ -97,3 +97,20 @@ async def test_update_bk_copies(admin_auth_client, mock_book_copies):
     data = response.json()
     assert "message" in data
     assert data["num_not_found"] == 0
+
+
+@pytest.mark.anyio
+async def test_return_book(admin_auth_client, mock_loan):
+    loan_id, barcode = mock_loan
+    form_data = {"bk_copy_barcode": barcode, "loan_id": loan_id}
+    response = await admin_auth_client.post(
+        f"{admin_auth_client.base_url}/books/loan-return", data=form_data
+    )
+    print(response.json())
+    assert response.status_code == 200
+    assert response.json()["message"] == "User loan cleared, awaiting staff inspection"
+    # confirm
+    response = await admin_auth_client.post(
+        f"{admin_auth_client.base_url}/books/loan-return", data=form_data
+    )
+    assert response.status_code == 409
