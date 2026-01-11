@@ -153,7 +153,7 @@ async def get_all_non_staff_users(db: AsyncSession):
     return result.scalars().all()
 
 
-async def get_loan_by_id(db: AsyncSession, _loan_id: str):
+async def get_loan_by_loan_id(db: AsyncSession, _loan_id: str):
     stmt = select(Loan).where(Loan.loan_id == _loan_id)
     result = await db.execute(stmt)
     return result.scalar_one_or_none()
@@ -175,9 +175,7 @@ async def update_user(
 
 
 async def get_default_superuser(db: AsyncSession, email: str):
-    stmt = select(User).where(
-        User.is_staff, User.is_superuser, User.email == email
-    )
+    stmt = select(User).where(User.is_staff, User.is_superuser, User.email == email)
     result = await db.execute(stmt)
     return result.scalar_one_or_none()
 

@@ -365,7 +365,7 @@ async def return_book_loan_service(
         fined: bool = False
         fine_fee: int = 0
         days_deltas: int = 0
-        loan = await crud.get_loan_by_id(db, loan_id)
+        loan = await crud.get_loan_by_loan_id(db, loan_id)
         if not loan:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Loan not found")
 

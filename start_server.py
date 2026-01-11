@@ -10,7 +10,7 @@ if __name__ == '__main__':
     if test_mode not in ['True', 'False']:
         print('TEST_MODE env variable not set properly!')
         sys.exit()
-    if test_mode:
+    if not test_mode:
         print(f"Can't start server | test_mode: {test_mode}")
         sys.exit()
     else:

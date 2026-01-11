@@ -136,7 +136,7 @@ class BookCopy(Base):
         String(50), ForeignKey("books.isbn"), nullable=False, index=True
     )
     serial: Mapped[int] = mapped_column(Integer, nullable=False)
-    copy_barcode: Mapped[str] = mapped_column(String(50), nullable=False)
+    copy_barcode: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
     status: Mapped[enum.Enum] = mapped_column(
         Enum(BkCopyStatus), default=BkCopyStatus.AVAILABLE
     )
